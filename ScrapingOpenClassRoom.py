@@ -3,6 +3,7 @@ import requests
 import concurrent
 import concurrent.futures
 import pandas as pd # 
+import os
 
 
 SESSION = requests.Session()
@@ -126,3 +127,56 @@ if __name__ == "__main__":
     
         
     df = pd.DataFrame.from_dict(list_de_donnee)
+
+    # nettoyage des données
+  
+    df["stock"] = df["stock"].str.split("(").str[-1].str.split().str[0].astype(int)
+    df["prix_ht"] = df["prix_ht"].str.split("£").str[-1].str.split().str[0].astype(float)
+    df["prix_ttc"] = df["prix_ttc"].str.split("£").str[-1].str.split().str[0].astype(float)      
+    
+    
+    df["user_rating"] = df["user_rating"].str.replace("One","1")
+    df["user_rating"] = df["user_rating"].str.replace("Two","2")
+    df["user_rating"] = df["user_rating"].str.replace("Three","3")
+    df["user_rating"] = df["user_rating"].str.replace("Four","4")
+    df["user_rating"] = df["user_rating"].str.replace("Five","5")
+    
+    df["user_rating"] = df["user_rating"].astype(int)
+
+
+    grouped = df.groupby("categorie")
+
+    try:
+        os.mkdir("data")
+    except:
+        pass
+
+    for nom_categorie, df_categorie in grouped:
+        df_categorie.to_csv("data/{}.csv".format(nom_categorie))
+        
+
+    try:
+        os.mkdir("image")
+    except:
+        pass
+
+    # Dernières modifications
+    print("Données dupliquées"),
+    print(df[df.duplicated(subset=["titre"])])
+    nb_images = 0
+
+    def download_image(titre, url_img):
+        titre = titre.replace("/", "_")
+        with open (f"image/{titre}.jpg", "wb") as f:
+            f.write(SESSION.get(url_img).content)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=24) as executor:
+        futures = [executor.submit(download_image, titre, url_img)
+                   for _, (titre, url_img) in df[["titre", "url_img"]].iterrows()]
+        for i, future in enumerate(concurrent.futures.as_completed(futures)):
+            future.result()
+            nb_images += 1
+            print((i+1) * 100 // nb_liens, "%", end="\r", flush=True)
+    print(f"{nb_images} images effectivement téléchargées")
+
+print("Scraping du site termine")
