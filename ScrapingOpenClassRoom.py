@@ -1,5 +1,8 @@
 from bs4 import BeautifulSoup #
 import requests 
+import concurrent
+import concurrent.futures
+import pandas as pd # 
 
 
 SESSION = requests.Session()
@@ -41,7 +44,7 @@ def trouver_liens_categorie(numeros_pages=[1],
     print("Nombres de liens reçu",len(links))
     return links
 
-# parsing de chaque page du catalogue
+# parsing de chaque page du catalogue 
 
 def parser_livre(url: str="https://books.toscrape.com/catalogue/a-light-in-the-attic_1000/index.html", 
                       ) -> dict:
@@ -80,3 +83,46 @@ def parser_livre(url: str="https://books.toscrape.com/catalogue/a-light-in-the-a
      
     return result_data
 
+# création d'une fonctionalité qui permet de demander a l'utilisateurs si il veut garder ou ecraser son fichier text contenant les liens reçu
+
+if __name__ == "__main__":
+    lien_recu = input('Voulez vous réutillisé les URLS du fichier ? O/N ')
+    if lien_recu.lower() == 'o':
+        with open('urls2.txt', "r") as file:
+            links = file.readlines()
+    else:
+        links = trouver_liens_categorie(range(1, trouver_nb_pages_categorie() + 1))
+        with open('urls2.txt', 'w') as file:
+            for link in links:
+                file.write(link + "\n")
+    list_de_donnee = []
+
+    nb_liens = len(links)
+    print("Nombre de liens", nb_liens)
+
+    ### Nouveau code avec threading
+    
+    import time
+    debut = time.time()
+    print("début")
+    with concurrent.futures.ThreadPoolExecutor(max_workers=24) as executor:
+        futures = [executor.submit(parser_livre, link.strip()) for link in links]
+        for i, future in enumerate(concurrent.futures.as_completed(futures)):
+            list_de_donnee.append(future.result())
+            print((i + 1) * 100 // nb_liens, "%", end="\r", flush=True)
+    print("fin", time.time() - debut)
+    
+    ### Ancien code séquential
+    """
+    import time
+    debut = time.time()
+    print("début")
+    for i, link in enumerate(links):
+        print((i + 1) * 100 // nb_liens, "%", end="\r", flush=True)
+        link = link.strip()
+        list_de_donnee.append(parser_livre(link))
+    print("fin", time.time() - debut)
+    """
+    
+        
+    df = pd.DataFrame.from_dict(list_de_donnee)
