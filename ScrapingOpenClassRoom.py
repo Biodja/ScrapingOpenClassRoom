@@ -1,8 +1,8 @@
-from bs4 import BeautifulSoup #
-import requests 
+from bs4 import BeautifulSoup # bibliothèque d'analyse syntaxique de documents html et xml (produit un arbre syntaxique pour chercher et modifier les éléments
+import requests # permet de faire des requetes html
 import concurrent
-import concurrent.futures
-import pandas as pd # 
+import concurrent.futures #lancer des taches en parrallèle avec le multi threading
+import pandas as pd # permet la manipulation et l'analyse de donnée
 import os
 
 
@@ -60,31 +60,28 @@ def parser_livre(url: str="https://books.toscrape.com/catalogue/a-light-in-the-a
     result_data = {}
     if response.ok:
         soup = BeautifulSoup(response.content, 'lxml') 
-
-        result_data['upc'] = soup.find('table', class_=["table-striped"]).find("tr").find("td").text
-        result_data['url_page'] = url
-        result_data['type'] = soup.find('table', class_=["table-striped"]).findAll("tr")[1].find("td").text
-        result_data['prix_ht'] = soup.find('table', class_=["table-striped"]).findAll("tr")[2].find("td").text
-        result_data['prix_ttc'] = soup.find('table', class_=["table-striped"]).findAll("tr")[3].find("td").text
-        result_data['tax'] = soup.find('table', class_=["table-striped"]).findAll("tr")[4].find("td").text
-        result_data['stock'] = soup.find('table', class_=["table-striped"]).findAll("tr")[5].find("td").text
-        result_data['nb_revues'] = soup.find('table', class_=["table-striped"]).findAll("tr")[6].find("td").text
+        result_data['universal_product_code(upc)'] = soup.find('table', class_=["table-striped"]).find("tr").find("td").text
+        result_data['product_page_url'] = url
+        result_data['price_excluding_tax'] = soup.find('table', class_=["table-striped"]).findAll("tr")[2].find("td").text
+        result_data['price_including_tax'] = soup.find('table', class_=["table-striped"]).findAll("tr")[3].find("td").text
+        result_data['number_available'] = soup.find('table', class_=["table-striped"]).findAll("tr")[5].find("td").text
         try:
-            result_data['description'] = soup.find('div', id=["product_description"]).find_next_sibling("p").text
+            result_data['product_description'] = soup.find('div', id=["product_description"]).find_next_sibling("p").text
         except AttributeError:
             print("Pas de description pour ", url)
-            result_data['description'] = None
-        result_data['titre'] = soup.find('div', class_=["product_main"]).find("h1").text
-        result_data['categorie'] = (soup.find('ul', class_=["breadcrumb"])
+            result_data['product_description'] = None
+        result_data['title'] = soup.find('div', class_=["product_main"]).find("h1").text
+        result_data['category'] = (soup.find('ul', class_=["breadcrumb"])
                                         .findAll("li")[2]
                                         .text
                                         .strip())
-        result_data['url_img'] = soup.find('img').attrs['src'].replace('../../', "https://books.toscrape.com/")
-        result_data['user_rating'] = soup.find('p', class_=("star-rating")).attrs['class'][-1]
-     
+        result_data['image_url'] = soup.find('img').attrs['src'].replace('../../', "https://books.toscrape.com/")
+        result_data['review_rating'] = soup.find('p', class_=("star-rating")).attrs['class'][-1]
+    
     return result_data
 
 # création d'une fonctionalité qui permet de demander a l'utilisateurs si il veut garder ou ecraser son fichier text contenant les liens reçu
+
 
 if __name__ == "__main__":
     lien_recu = input('Voulez vous réutillisé les URLS du fichier ? O/N ')
@@ -130,21 +127,20 @@ if __name__ == "__main__":
 
     # nettoyage des données
   
-    df["stock"] = df["stock"].str.split("(").str[-1].str.split().str[0].astype(int)
-    df["prix_ht"] = df["prix_ht"].str.split("£").str[-1].str.split().str[0].astype(float)
-    df["prix_ttc"] = df["prix_ttc"].str.split("£").str[-1].str.split().str[0].astype(float)      
+    df["number_available"] = df["number_available"].str.split("(").str[-1].str.split().str[0].astype(int)
+     
     
     
-    df["user_rating"] = df["user_rating"].str.replace("One","1")
-    df["user_rating"] = df["user_rating"].str.replace("Two","2")
-    df["user_rating"] = df["user_rating"].str.replace("Three","3")
-    df["user_rating"] = df["user_rating"].str.replace("Four","4")
-    df["user_rating"] = df["user_rating"].str.replace("Five","5")
+    df["review_rating"] = df["review_rating"].str.replace("One","1")
+    df["review_rating"] = df["review_rating"].str.replace("Two","2")
+    df["review_rating"] = df["review_rating"].str.replace("Three","3")
+    df["review_rating"] = df["review_rating"].str.replace("Four","4")
+    df["review_rating"] = df["review_rating"].str.replace("Five","5")
     
-    df["user_rating"] = df["user_rating"].astype(int)
+    df["review_rating"] = df["review_rating"].astype(int)
 
 
-    grouped = df.groupby("categorie")
+    grouped = df.groupby("category")
 
     try:
         os.mkdir("data")
@@ -152,7 +148,7 @@ if __name__ == "__main__":
         pass
 
     for nom_categorie, df_categorie in grouped:
-        df_categorie.to_csv("data/{}.csv".format(nom_categorie))
+        df_categorie.to_csv("data/{}.csv".format(nom_categorie), index=False)
         
 
     try:
@@ -162,7 +158,7 @@ if __name__ == "__main__":
 
     # Dernières modifications
     print("Données dupliquées"),
-    print(df[df.duplicated(subset=["titre"])])
+    print(df[df.duplicated(subset=["title"])])
     nb_images = 0
 
     def download_image(titre, url_img):
@@ -172,7 +168,7 @@ if __name__ == "__main__":
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=24) as executor:
         futures = [executor.submit(download_image, titre, url_img)
-                   for _, (titre, url_img) in df[["titre", "url_img"]].iterrows()]
+                   for _, (titre, url_img) in df[["title", "image_url"]].iterrows()]
         for i, future in enumerate(concurrent.futures.as_completed(futures)):
             future.result()
             nb_images += 1
